@@ -29,9 +29,6 @@ DyslexAI operates at the browser layer with two modes:
 - Streaming responses render word-by-word for a natural feel
 - Two interaction modes: **Socratic** (guided questioning) and **Open** (direct answer)
 - Falls back to pre-written scaffolding questions when no API key is configured
-- **Accessibility Agent toast** — on page load, suggests Lens Mode settings based on content type (one-click Apply)
-- **Keyboard shortcut**: `Alt+C` opens Coach instantly on any page
-- **Popup button**: "Open Coach on this page →" in the extension popup
 
 ---
 
