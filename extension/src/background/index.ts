@@ -26,18 +26,19 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 async function handleMessage(message: AgentMessage): Promise<unknown> {
-  const settings = await getSettings();
-
   switch (message.type) {
-    case "SCAN_REQUEST":
+    case "SCAN_REQUEST": {
+      const settings = await getSettings();
       return runScannerAgent(message.payload as Parameters<typeof runScannerAgent>[0], settings);
-
+    }
     case "TUTOR_MESSAGE":
-      return runTutorAgent(message.payload as Parameters<typeof runTutorAgent>[0], settings);
+      // apiKey is included in the payload by the content script — no storage read needed
+      return runTutorAgent(message.payload as Parameters<typeof runTutorAgent>[0]);
 
-    case "ACCESSIBILITY_SUGGEST":
+    case "ACCESSIBILITY_SUGGEST": {
+      const settings = await getSettings();
       return runAccessibilityAgent(message.payload as Parameters<typeof runAccessibilityAgent>[0], settings);
-
+    }
     default:
       return null;
   }

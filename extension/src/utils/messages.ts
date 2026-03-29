@@ -37,6 +37,7 @@ export interface TutorMessagePayload {
   conversationHistory: TutorTurn[];
   userMessage: string;
   mode: "open" | "socratic";
+  apiKey: string; // passed from content script — avoids background re-read issue
 }
 
 export interface TutorTurn {

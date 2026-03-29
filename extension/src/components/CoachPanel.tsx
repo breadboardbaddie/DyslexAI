@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { TutorTurn, createMessage, sendToBackground, TutorResponsePayload } from "../utils/messages";
+import { getSettings } from "../utils/storage";
 
 interface Props {
   regionText: string;
@@ -11,10 +12,14 @@ export function CoachPanel({ regionText, onClose }: Props) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Track whether the user has started a conversation (prevents welcome screen
-  // from flickering back during loading or after errors)
   const [started, setStarted] = useState(false);
+  const [apiKey, setApiKey] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Load API key once on mount — content script has direct storage access
+  useEffect(() => {
+    getSettings().then((s) => setApiKey(s.coachMode.apiKey ?? ""));
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -26,11 +31,15 @@ export function CoachPanel({ regionText, onClose }: Props) {
     setLoading(true);
     setError(null);
 
+    // Re-read key each time in case user updated it mid-session
+    const currentKey = apiKey || (await getSettings()).coachMode.apiKey || "";
+
     const msg = createMessage("TUTOR_MESSAGE", {
       regionText,
       conversationHistory: history,
       userMessage,
       mode,
+      apiKey: currentKey,
     });
 
     try {
