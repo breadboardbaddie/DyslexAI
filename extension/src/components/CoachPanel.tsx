@@ -2,19 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import { TutorTurn, TutorMessagePayload, TutorResponsePayload } from "../utils/messages";
 import { getSettings } from "../utils/storage";
 
-const SYSTEM_PROMPT = `You are Coach, a warm, patient, and encouraging math tutor built into a web browser accessibility tool. Your users have dyscalculia, dyslexia, math anxiety, or other learning differences. They may feel embarrassed or anxious asking for help.
-
-Your rules:
-- NEVER shame or judge. Always be encouraging.
-- Break problems into the SMALLEST possible steps.
-- Ask only ONE question at a time in Socratic mode.
-- In open mode, answer the user's question directly but gently, then check understanding.
-- Never give the full answer until the user has worked through it with you, unless they explicitly ask.
-- Use simple language. Avoid jargon. If you must use a math term, explain it immediately.
-- Use visual analogies when helpful (e.g., "imagine you have 5 apples...").
-- Keep responses SHORT — 2–4 sentences maximum per turn.
-- Always end with either a question or a gentle encouragement.`;
-
 const FALLBACK_QUESTIONS = [
   "Let's slow down and break it apart. What do you think this is asking you to find?",
   "What part of this feels most confusing right now? Try to point at just one thing.",
@@ -33,13 +20,29 @@ function nextFallback() {
 function callTutorViaPort(payload: TutorMessagePayload): Promise<TutorResponsePayload> {
   return new Promise((resolve, reject) => {
     const port = chrome.runtime.connect({ name: "dyslexai-tutor" });
+    let settled = false;
+
+    // Keepalive: ping the port every 20s so Chrome doesn't kill the service worker
+    // mid-fetch. MV3 workers are killed after ~30s of inactivity without a port ping.
+    const keepAlive = setInterval(() => {
+      try { port.postMessage({ keepAlive: true }); } catch { /* port already closed */ }
+    }, 20000);
+
     const timeout = setTimeout(() => {
-      port.disconnect();
-      reject(new Error("Timed out waiting for Coach response (30s)"));
+      if (!settled) {
+        settled = true;
+        clearInterval(keepAlive);
+        port.disconnect();
+        reject(new Error("Timed out (30s). Check your API key and internet connection."));
+      }
     }, 30000);
 
-    port.onMessage.addListener((msg: { ok: boolean; result?: TutorResponsePayload; error?: string }) => {
+    port.onMessage.addListener((msg: { ok?: boolean; result?: TutorResponsePayload; error?: string; keepAlive?: boolean }) => {
+      if (msg.keepAlive) return; // ignore pong
+      if (settled) return;
+      settled = true;
       clearTimeout(timeout);
+      clearInterval(keepAlive);
       port.disconnect();
       if (msg.ok && msg.result) {
         resolve(msg.result);
@@ -49,8 +52,12 @@ function callTutorViaPort(payload: TutorMessagePayload): Promise<TutorResponsePa
     });
 
     port.onDisconnect.addListener(() => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timeout);
-      reject(new Error("Background port disconnected unexpectedly"));
+      clearInterval(keepAlive);
+      const err = chrome.runtime.lastError?.message ?? "Service worker disconnected";
+      reject(new Error(err));
     });
 
     port.postMessage(payload);

@@ -21,7 +21,8 @@ Your rules:
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== "dyslexai-tutor") return;
 
-  port.onMessage.addListener(async (payload: TutorMessagePayload) => {
+  port.onMessage.addListener(async (payload: TutorMessagePayload & { keepAlive?: boolean }) => {
+    if (payload.keepAlive) return; // ignore pings, just keeping worker alive
     try {
       const reply = await callAnthropicDirect(payload);
       port.postMessage({ ok: true, result: {
