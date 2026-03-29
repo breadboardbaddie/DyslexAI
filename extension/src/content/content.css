@@ -14,16 +14,37 @@
   outline: 2px solid #f0a500;
 }
 
+/* Coach regions: invisible by default — page looks completely normal */
 .dyslexai-coach-region {
-  background-color: var(--dyslexai-coach-highlight, #d4edff);
-  border-bottom: 2px dashed #4a90d9;
-  cursor: pointer;
-  border-radius: 2px;
-  transition: background-color 0.15s ease;
+  position: relative;
+  cursor: default;
 }
 
-.dyslexai-coach-region:hover {
-  background-color: #b8dcff;
+/* Tiny floating "Ask Coach" pill — only appears on hover */
+.dyslexai-coach-region::after {
+  content: "💬 Ask Coach";
+  position: absolute;
+  top: -26px;
+  left: 0;
+  background: #2d3a8c;
+  color: #fff;
+  font-size: 11px;
+  font-family: system-ui, sans-serif;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 2147483640;
+  box-shadow: 0 2px 8px rgba(45,58,140,0.25);
+}
+
+.dyslexai-coach-region:hover::after {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* Overlay layer */

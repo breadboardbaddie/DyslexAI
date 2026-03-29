@@ -18,16 +18,16 @@ let coachContainer: HTMLDivElement | null = null;
 async function init() {
   settings = await getSettings();
 
-  // Check if this domain is blocked
   const hostname = window.location.hostname;
   if (settings.blockedDomains.some((d) => hostname.includes(d))) return;
 
   if (settings.lensMode.enabled) {
     applyLensMode(settings);
+    if (settings.lensMode.highlightNumbers) {
+      highlightNumbers(openNumberPopup);
+    }
   }
-  if (settings.lensMode.highlightNumbers && settings.lensMode.enabled) {
-    highlightNumbers(openNumberPopup);
-  }
+
   if (settings.coachMode.enabled) {
     scanPageForMath();
   }
@@ -60,16 +60,16 @@ function openNumberPopup(value: string, numericValue: number | null, anchorEl: H
 }
 
 function closeNumberPopup() {
-  if (popupRoot) {
-    popupRoot.unmount();
-    popupRoot = null;
-  }
+  if (popupRoot) { popupRoot.unmount(); popupRoot = null; }
   popupContainer?.remove();
   popupContainer = null;
 }
 
 function openCoachPanel(regionText: string) {
-  if (coachContainer) return; // already open
+  // If already open, just update the context
+  if (coachContainer) {
+    closeCoachPanel();
+  }
 
   coachContainer = document.createElement("div");
   coachContainer.id = "dyslexai-coach-root";
@@ -77,34 +77,34 @@ function openCoachPanel(regionText: string) {
 
   coachRoot = createRoot(coachContainer);
   coachRoot.render(
-    <CoachPanel
-      regionText={regionText}
-      onClose={closeCoachPanel}
-    />
+    <CoachPanel regionText={regionText} onClose={closeCoachPanel} />
   );
 }
 
 function closeCoachPanel() {
-  if (coachRoot) {
-    coachRoot.unmount();
-    coachRoot = null;
-  }
+  if (coachRoot) { coachRoot.unmount(); coachRoot = null; }
   coachContainer?.remove();
   coachContainer = null;
 }
 
+function clearCoachRegions() {
+  document.querySelectorAll(".dyslexai-coach-region").forEach((el) => {
+    el.classList.remove("dyslexai-coach-region");
+    el.removeAttribute("data-dyslexai-coach");
+  });
+  closeCoachPanel();
+}
+
 async function scanPageForMath() {
-  // Pass 1: client-side local scan — works without API key, instant
+  // Pass 1: instant client-side scan — no API key needed
   const localRegions = scanPageLocally(settings.coachMode.aggressiveness);
   for (const region of localRegions) {
     if (!region.element.hasAttribute("data-dyslexai-coach")) {
-      region.element.classList.add("dyslexai-coach-region");
-      region.element.setAttribute("data-dyslexai-coach", region.text);
-      region.element.addEventListener("click", () => openCoachPanel(region.text), { once: true });
+      attachCoachRegion(region.element as HTMLElement, region.text);
     }
   }
 
-  // Pass 2: AI scan if API key available — enhances with better detection
+  // Pass 2: AI-enhanced scan if API key available
   const apiKey = settings.coachMode.apiKey;
   if (!apiKey) return;
 
@@ -117,45 +117,54 @@ async function scanPageForMath() {
   });
 
   try {
-    const result = await sendToBackground(msg) as { regions: Array<{ text: string; type: string; confidence: number }> };
+    const result = await sendToBackground(msg) as {
+      regions: Array<{ text: string; type: string; confidence: number }>;
+    };
     if (!result?.regions?.length) return;
-
     result.regions
       .filter((r) => r.confidence > 0.5)
-      .forEach((region) => {
-        markCoachRegion(region.text, region.type);
-      });
+      .forEach((region) => markCoachRegionByText(region.text));
   } catch {
-    // Silent fail — AI scan is enhancement only
+    // silent — AI scan is enhancement only
   }
 }
 
-function markCoachRegion(text: string, _type: string) {
-  if (!text || text.length < 10) return;
+function attachCoachRegion(el: HTMLElement, text: string) {
+  el.classList.add("dyslexai-coach-region");
+  el.setAttribute("data-dyslexai-coach", text);
 
+  // Open panel on click — natural since ::after pill signals it's interactive
+  el.addEventListener("click", (e) => {
+    // Don't intercept clicks on links or inputs inside the region
+    const target = e.target as HTMLElement;
+    if (target.tagName === "A" || target.tagName === "INPUT" || target.tagName === "BUTTON") return;
+    e.stopPropagation();
+    openCoachPanel(text);
+  });
+}
+
+function markCoachRegionByText(text: string) {
+  if (!text || text.length < 10) return;
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   let node: Node | null;
-
   while ((node = walker.nextNode())) {
     const nodeText = node.textContent || "";
-    const idx = nodeText.indexOf(text.slice(0, 60));
-    if (idx === -1) continue;
-
+    if (!nodeText.includes(text.slice(0, 50))) continue;
     const parent = node.parentElement;
-    if (!parent || parent.classList.contains("dyslexai-coach-region")) continue;
-
-    parent.classList.add("dyslexai-coach-region");
-    parent.setAttribute("data-dyslexai-coach", text);
-    parent.addEventListener("click", () => openCoachPanel(text), { once: true });
+    if (!parent || parent.hasAttribute("data-dyslexai-coach")) continue;
+    attachCoachRegion(parent, text);
     break;
   }
 }
 
-// Listen for messages from background / popup
+// Listen for settings changes from popup
 chrome.runtime.onMessage.addListener((message: AgentMessage) => {
   if (message.type === "SETTINGS_UPDATED") {
     getSettings().then((s) => {
+      const prevCoachEnabled = settings.coachMode.enabled;
       settings = s;
+
+      // Lens Mode
       if (s.lensMode.enabled) {
         applyLensMode(s);
         if (s.lensMode.highlightNumbers) {
@@ -167,8 +176,16 @@ chrome.runtime.onMessage.addListener((message: AgentMessage) => {
         removeLensMode();
         clearNumberHighlights();
       }
+
+      // Coach Mode — clear regions immediately when toggled off
+      if (!s.coachMode.enabled && prevCoachEnabled) {
+        clearCoachRegions();
+      } else if (s.coachMode.enabled && !prevCoachEnabled) {
+        scanPageForMath();
+      }
     });
   }
+
   if (message.type === "TRIGGER_COACH") {
     const bodyText = document.body.innerText.slice(0, 500);
     openCoachPanel(bodyText);
