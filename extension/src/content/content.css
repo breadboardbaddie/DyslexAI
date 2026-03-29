@@ -1,0 +1,75 @@
+/* DyslexAI content script styles — injected into every page */
+
+.dyslexai-number {
+  background-color: var(--dyslexai-number-highlight, #ffe066);
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0 2px;
+  transition: background-color 0.15s ease;
+  position: relative;
+}
+
+.dyslexai-number:hover {
+  background-color: var(--dyslexai-number-highlight-hover, #ffd700);
+  outline: 2px solid #f0a500;
+}
+
+.dyslexai-coach-region {
+  background-color: var(--dyslexai-coach-highlight, #d4edff);
+  border-bottom: 2px dashed #4a90d9;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background-color 0.15s ease;
+}
+
+.dyslexai-coach-region:hover {
+  background-color: #b8dcff;
+}
+
+/* Overlay layer */
+#dyslexai-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 2147483640;
+  mix-blend-mode: multiply;
+}
+
+/* Number Insight Popup */
+#dyslexai-popup {
+  position: absolute;
+  z-index: 2147483645;
+  background: #ffffff;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.13);
+  padding: 16px;
+  min-width: 200px;
+  max-width: 280px;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+}
+
+/* Coach Panel */
+#dyslexai-coach-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 360px;
+  height: 100vh;
+  z-index: 2147483644;
+  background: #f8f9ff;
+  border-left: 2px solid #d0d8ff;
+  box-shadow: -4px 0 24px rgba(80,80,200,0.10);
+  display: flex;
+  flex-direction: column;
+  font-family: system-ui, sans-serif;
+  transition: transform 0.3s ease;
+}
+
+#dyslexai-coach-panel.hidden {
+  transform: translateX(100%);
+}
