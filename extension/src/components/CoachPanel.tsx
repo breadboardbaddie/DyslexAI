@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import { TutorTurn } from "../utils/messages";
+import { TutorTurn, TutorMessagePayload, TutorResponsePayload } from "../utils/messages";
 import { getSettings } from "../utils/storage";
-import { callClaude, ClaudeMessage } from "../utils/claudeDirect";
 
 const SYSTEM_PROMPT = `You are Coach, a warm, patient, and encouraging math tutor built into a web browser accessibility tool. Your users have dyscalculia, dyslexia, math anxiety, or other learning differences. They may feel embarrassed or anxious asking for help.
 
@@ -26,6 +25,36 @@ const FALLBACK_QUESTIONS = [
 let fallbackIdx = 0;
 function nextFallback() {
   return FALLBACK_QUESTIONS[fallbackIdx++ % FALLBACK_QUESTIONS.length];
+}
+
+// Use a long-lived port to call the background service worker.
+// Ports keep the worker alive for the duration of the call and avoid CORS —
+// background workers can fetch api.anthropic.com, content scripts cannot.
+function callTutorViaPort(payload: TutorMessagePayload): Promise<TutorResponsePayload> {
+  return new Promise((resolve, reject) => {
+    const port = chrome.runtime.connect({ name: "dyslexai-tutor" });
+    const timeout = setTimeout(() => {
+      port.disconnect();
+      reject(new Error("Timed out waiting for Coach response (30s)"));
+    }, 30000);
+
+    port.onMessage.addListener((msg: { ok: boolean; result?: TutorResponsePayload; error?: string }) => {
+      clearTimeout(timeout);
+      port.disconnect();
+      if (msg.ok && msg.result) {
+        resolve(msg.result);
+      } else {
+        reject(new Error(msg.error ?? "Unknown error from background"));
+      }
+    });
+
+    port.onDisconnect.addListener(() => {
+      clearTimeout(timeout);
+      reject(new Error("Background port disconnected unexpectedly"));
+    });
+
+    port.postMessage(payload);
+  });
 }
 
 interface Props {
@@ -54,60 +83,28 @@ export function CoachPanel({ regionText, onClose }: Props) {
     const settings = await getSettings();
     const apiKey = settings.coachMode.apiKey?.trim();
 
-    // No API key — use fallback
+    // No API key — use fallback question, no error shown
     if (!apiKey) {
-      const reply = mode === "socratic"
-        ? nextFallback()
-        : "Add your Claude API key in DyslexAI settings to get personalized help. For now: " + nextFallback();
-      appendTurns(userMessage, reply, mode);
+      appendTurns(userMessage, nextFallback(), mode);
       setLoading(false);
       return;
     }
 
-    // Build messages for Claude
-    const contextPrefix = `The user is reading this on a webpage:\n\n"${regionText}"\n\n`;
-    const messages: ClaudeMessage[] = [];
-
-    if (history.length === 0) {
-      const content = mode === "socratic"
-        ? contextPrefix + "Please ask me ONE gentle guiding question to help me start thinking about this."
-        : contextPrefix + userMessage;
-      messages.push({ role: "user", content });
-    } else {
-      // Rebuild history — inject context into first turn only
-      history.forEach((t, i) => {
-        if (t.content.trim()) {
-          messages.push({
-            role: t.role,
-            content: i === 0 ? contextPrefix + t.content : t.content,
-          });
-        }
-      });
-      if (userMessage.trim()) {
-        messages.push({ role: "user", content: userMessage });
-      }
-    }
-
-    // Claude requires messages to start with "user" and alternate roles
-    // Deduplicate consecutive same-role messages just in case
-    const deduped: ClaudeMessage[] = [];
-    for (const m of messages) {
-      if (deduped.length > 0 && deduped[deduped.length - 1].role === m.role) {
-        deduped[deduped.length - 1].content += "\n" + m.content;
-      } else {
-        deduped.push(m);
-      }
-    }
+    const payload: TutorMessagePayload = {
+      regionText,
+      conversationHistory: history,
+      userMessage,
+      mode,
+      apiKey,
+    };
 
     try {
-      const reply = await callClaude({ apiKey, system: SYSTEM_PROMPT, messages: deduped });
-      appendTurns(userMessage, reply, mode);
+      const response = await callTutorViaPort(payload);
+      appendTurns(userMessage, response.reply, mode);
     } catch (err) {
       console.error("[DyslexAI Coach]", err);
-      const fallback = nextFallback();
-      appendTurns(userMessage, fallback, mode);
-      // Show the real error so it's diagnosable
       const msg = err instanceof Error ? err.message : String(err);
+      appendTurns(userMessage, nextFallback(), mode);
       setError(`Claude error: ${msg}`);
     } finally {
       setLoading(false);

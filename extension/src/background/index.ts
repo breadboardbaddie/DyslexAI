@@ -4,14 +4,32 @@ import { runScannerAgent } from "../agents/scannerAgent";
 import { runTutorAgent } from "../agents/tutorAgent";
 import { runAccessibilityAgent } from "../agents/accessibilityAgent";
 
-// Background service worker — routes messages between content script and agents
+// Long-lived port connection for tutor calls.
+// Ports keep the service worker alive for the duration of the API call,
+// solving the MV3 "worker killed mid-fetch" problem.
+// Background can also call external APIs (no CORS) — content scripts cannot.
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== "dyslexai-tutor") return;
+
+  port.onMessage.addListener(async (payload) => {
+    try {
+      const result = await runTutorAgent(payload);
+      port.postMessage({ ok: true, result });
+    } catch (err) {
+      console.error("[DyslexAI background] tutor error:", err);
+      port.postMessage({ ok: false, error: String(err) });
+    }
+  });
+});
+
+// Standard message handler for scan + accessibility agents
 chrome.runtime.onMessage.addListener(
   (message: AgentMessage, _sender, sendResponse) => {
     handleMessage(message).then(sendResponse).catch((err) => {
       console.error("[DyslexAI background] error:", err);
       sendResponse({ error: String(err) });
     });
-    return true; // keep message channel open for async response
+    return true;
   }
 );
 
@@ -31,10 +49,6 @@ async function handleMessage(message: AgentMessage): Promise<unknown> {
       const settings = await getSettings();
       return runScannerAgent(message.payload as Parameters<typeof runScannerAgent>[0], settings);
     }
-    case "TUTOR_MESSAGE":
-      // apiKey is included in the payload by the content script — no storage read needed
-      return runTutorAgent(message.payload as Parameters<typeof runTutorAgent>[0]);
-
     case "ACCESSIBILITY_SUGGEST": {
       const settings = await getSettings();
       return runAccessibilityAgent(message.payload as Parameters<typeof runAccessibilityAgent>[0], settings);
