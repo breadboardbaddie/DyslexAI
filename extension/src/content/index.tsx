@@ -32,11 +32,16 @@ async function init() {
     scanPageForMath();
   }
 
-  // Re-scan on DOM changes (for SPAs)
+  // Re-scan on DOM changes (for SPAs) — debounced via requestIdleCallback
+  // to avoid jank on large DOMs (e.g. Wikipedia) during TreeWalker traversal
+  let idleCallbackId: number | null = null;
   const observer = new MutationObserver(() => {
-    if (settings.coachMode.enabled) {
+    if (!settings.coachMode.enabled) return;
+    if (idleCallbackId !== null) return; // already queued
+    idleCallbackId = requestIdleCallback(() => {
+      idleCallbackId = null;
       scanPageForMath();
-    }
+    }, { timeout: 1000 });
   });
   observer.observe(document.body, { childList: true, subtree: true });
 }
