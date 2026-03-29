@@ -1,5 +1,7 @@
 # DyslexAI
 
+**Live:** https://dyslexai-five.vercel.app
+
 A Chrome browser extension that makes any webpage genuinely accessible for people with dyslexia, dyscalculia, and numeric anxiety — without leaving the page.
 
 ---
