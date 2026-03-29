@@ -1,7 +1,6 @@
 import { DyslexAISettings, getApiKey } from "../utils/storage";
 import { AccessibilitySuggestPayload } from "../utils/messages";
-
-const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+import { callAnthropicJSON } from "../utils/anthropicFetch";
 
 const SYSTEM_PROMPT = `You are an accessibility configuration agent for a dyslexia/dyscalculia browser tool.
 Based on the page content type provided, suggest optimal Lens Mode settings.
@@ -32,35 +31,13 @@ export async function runAccessibilityAgent(
     return { suggest: {}, reason: "No API key configured." };
   }
 
-  const response = await fetch(ANTHROPIC_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 256,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Content type: ${payload.contentType}\n\nSample text:\n${payload.sampleText.slice(0, 500)}`,
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    return { suggest: {}, reason: "API request failed." };
-  }
-
   try {
-    const data = await response.json() as { content: Array<{ type: string; text: string }> };
-    const text = data.content?.find((c) => c.type === "text")?.text ?? "{}";
-    return JSON.parse(text) as AccessibilitySuggestPayload;
+    return await callAnthropicJSON<AccessibilitySuggestPayload>({
+      apiKey,
+      system: SYSTEM_PROMPT,
+      maxTokens: 256,
+      messages: [{ role: "user", content: `Content type: ${payload.contentType}\n\nSample text:\n${payload.sampleText.slice(0, 500)}` }],
+    });
   } catch {
     return { suggest: {}, reason: "Could not parse suggestion." };
   }
