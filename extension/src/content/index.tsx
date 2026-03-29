@@ -7,6 +7,7 @@ import { NumberPopup } from "../components/NumberPopup";
 import { CoachPanel } from "../components/CoachPanel";
 import { createMessage, sendToBackground } from "../utils/messages";
 import { AgentMessage } from "../utils/messages";
+import { scanPageLocally } from "../utils/mathScanner";
 
 let settings: DyslexAISettings;
 let popupRoot: ReturnType<typeof createRoot> | null = null;
@@ -93,6 +94,20 @@ function closeCoachPanel() {
 }
 
 async function scanPageForMath() {
+  // Pass 1: client-side local scan — works without API key, instant
+  const localRegions = scanPageLocally(settings.coachMode.aggressiveness);
+  for (const region of localRegions) {
+    if (!region.element.hasAttribute("data-dyslexai-coach")) {
+      region.element.classList.add("dyslexai-coach-region");
+      region.element.setAttribute("data-dyslexai-coach", region.text);
+      region.element.addEventListener("click", () => openCoachPanel(region.text), { once: true });
+    }
+  }
+
+  // Pass 2: AI scan if API key available — enhances with better detection
+  const apiKey = settings.coachMode.apiKey;
+  if (!apiKey) return;
+
   const bodyText = document.body.innerText.slice(0, 6000);
   if (!bodyText.trim()) return;
 
@@ -105,14 +120,13 @@ async function scanPageForMath() {
     const result = await sendToBackground(msg) as { regions: Array<{ text: string; type: string; confidence: number }> };
     if (!result?.regions?.length) return;
 
-    // Highlight matching regions in the DOM
     result.regions
       .filter((r) => r.confidence > 0.5)
       .forEach((region) => {
         markCoachRegion(region.text, region.type);
       });
   } catch {
-    // Silent fail — coach scan is non-critical
+    // Silent fail — AI scan is enhancement only
   }
 }
 

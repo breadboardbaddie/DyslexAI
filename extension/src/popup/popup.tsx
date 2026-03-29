@@ -69,10 +69,12 @@ function Popup() {
             <Toggle label="Highlight numbers" checked={l.highlightNumbers} onChange={(v) => updateLens({ highlightNumbers: v })} />
             {l.highlightNumbers && (
               <ColorPicker label="Highlight color" value={l.numberHighlightColor}
+                defaultColor="#ffe066"
                 onChange={(v) => updateLens({ numberHighlightColor: v })} />
             )}
             <ColorPicker label="Overlay tint (optional)" value={l.overlayColor ?? ""}
-              onChange={(v) => updateLens({ overlayColor: v || null })} />
+              onChange={(v) => updateLens({ overlayColor: v || null })}
+              onClear={() => updateLens({ overlayColor: null })} />
           </>
         )}
       </Section>
@@ -167,10 +169,12 @@ function Slider({ label, value, min, max, step, onChange }: {
   label: string; value: number; min: number; max: number; step: number;
   onChange: (v: number) => void;
 }) {
+  const display = value === 0 ? "off" : value.toFixed(2);
   return (
     <div style={{ marginBottom: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#888", marginBottom: 2 }}>
-        <span>{label}</span><span>{value.toFixed(2)}</span>
+        <span>{label}</span>
+        <span style={{ color: value === 0 ? "#ccc" : "#666" }}>{display}</span>
       </div>
       <input type="range" min={min} max={max} step={step} value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
@@ -179,12 +183,29 @@ function Slider({ label, value, min, max, step, onChange }: {
   );
 }
 
-function ColorPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function ColorPicker({ label, value, onChange, onClear, defaultColor }: {
+  label: string; value: string; onChange: (v: string) => void;
+  onClear?: () => void; defaultColor?: string;
+}) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
       <span style={{ fontSize: 12, color: "#555" }}>{label}</span>
-      <input type="color" value={value || "#ffffff"} onChange={(e) => onChange(e.target.value)}
-        style={{ width: 32, height: 24, border: "1px solid #ddd", borderRadius: 4, cursor: "pointer", padding: 0 }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <input type="color" value={value || defaultColor || "#ffffff"} onChange={(e) => onChange(e.target.value)}
+          style={{ width: 32, height: 24, border: "1px solid #ddd", borderRadius: 4, cursor: "pointer", padding: 0 }} />
+        {onClear && value && (
+          <button onClick={onClear}
+            style={{ background: "#f5f5f5", border: "1px solid #ddd", borderRadius: 4, padding: "2px 6px", cursor: "pointer", fontSize: 11, color: "#888" }}>
+            ✕
+          </button>
+        )}
+        {defaultColor && value !== defaultColor && !onClear && (
+          <button onClick={() => onChange(defaultColor)}
+            style={{ background: "#f5f5f5", border: "1px solid #ddd", borderRadius: 4, padding: "2px 6px", cursor: "pointer", fontSize: 11, color: "#888" }}>
+            Reset
+          </button>
+        )}
+      </div>
     </div>
   );
 }

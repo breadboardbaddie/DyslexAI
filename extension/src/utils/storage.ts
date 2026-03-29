@@ -22,9 +22,9 @@ export const DEFAULT_SETTINGS: DyslexAISettings = {
   lensMode: {
     enabled: false,
     font: "system",
-    letterSpacing: 0.05,
-    wordSpacing: 0.1,
-    lineHeight: 1.6,
+    letterSpacing: 0,      // 0 = don't override page default
+    wordSpacing: 0,        // 0 = don't override page default
+    lineHeight: 0,         // 0 = don't override page default
     overlayColor: null,
     highlightNumbers: true,
     numberHighlightColor: "#ffe066",

@@ -9,32 +9,56 @@ interface Props {
 
 type PopupTab = "dots" | "audio" | "style";
 
+// All styles inlined — isolated from page CSS via Shadow DOM mount
+const POPUP_STYLE = `
+  #dyslexai-popup-inner {
+    position: fixed;
+    z-index: 2147483647;
+    background: #ffffff;
+    border: 1.5px solid #dde3ff;
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(74,144,217,0.18);
+    padding: 16px;
+    min-width: 220px;
+    max-width: 290px;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    color: #333;
+    line-height: 1.4;
+  }
+`;
+
 export function NumberPopup({ value, numericValue, anchorEl, onClose }: Props) {
   const [tab, setTab] = useState<PopupTab>("dots");
-  const [chunkSize, setChunkSize] = useState<5 | 10>(10);
   const [speaking, setSpeaking] = useState(false);
-  const popupRef = useRef<HTMLDivElement>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const shadowRef = useRef<ShadowRoot | null>(null);
+  const innerRef = useRef<HTMLDivElement | null>(null);
 
-  // Position popup near the anchor element
+  // Position popup near anchor
   const [pos, setPos] = useState({ top: 0, left: 0 });
   useEffect(() => {
     const rect = anchorEl.getBoundingClientRect();
-    const scrollY = window.scrollY;
-    const scrollX = window.scrollX;
-    setPos({
-      top: rect.bottom + scrollY + 8,
-      left: Math.min(rect.left + scrollX, window.innerWidth - 300),
-    });
+    let top = rect.bottom + 8;
+    let left = rect.left;
+    // Keep on screen
+    if (left + 290 > window.innerWidth) left = window.innerWidth - 300;
+    if (top + 300 > window.innerHeight) top = rect.top - 310;
+    setPos({ top, left });
   }, [anchorEl]);
 
   // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (popupRef.current && !popupRef.current.contains(e.target as Node) && e.target !== anchorEl) {
+      if (
+        innerRef.current &&
+        !innerRef.current.contains(e.target as Node) &&
+        e.target !== anchorEl
+      ) {
         onClose();
       }
     };
-    document.addEventListener("mousedown", handler);
+    setTimeout(() => document.addEventListener("mousedown", handler), 0);
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose, anchorEl]);
 
@@ -48,139 +72,144 @@ export function NumberPopup({ value, numericValue, anchorEl, onClose }: Props) {
     window.speechSynthesis.speak(utterance);
   };
 
+  const s = (style: React.CSSProperties): React.CSSProperties => style;
+
   return (
     <div
-      ref={popupRef}
-      id="dyslexai-popup"
-      style={{ top: pos.top, left: pos.left }}
+      ref={hostRef}
+      id="dyslexai-popup-inner"
+      style={s({
+        position: "fixed",
+        top: pos.top,
+        left: pos.left,
+        zIndex: 2147483647,
+        background: "#ffffff",
+        border: "1.5px solid #dde3ff",
+        borderRadius: 14,
+        boxShadow: "0 8px 32px rgba(74,144,217,0.18)",
+        padding: 16,
+        minWidth: 220,
+        maxWidth: 290,
+        fontFamily: "system-ui, -apple-system, sans-serif",
+        fontSize: 14,
+        color: "#333",
+        lineHeight: "1.4",
+      })}
     >
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <span style={{ fontWeight: 700, fontSize: 16, color: "#333" }}>{value}</span>
-        <button
-          onClick={onClose}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#999", lineHeight: 1 }}
-          aria-label="Close"
-        >×</button>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
-        {(["dots", "audio", "style"] as PopupTab[]).map((t) => (
+      <style>{POPUP_STYLE}</style>
+      <div ref={innerRef}>
+        {/* Header */}
+        <div style={s({ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 })}>
+          <span style={s({ fontWeight: 700, fontSize: 17, color: "#2d3a8c" })}>{value}</span>
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            style={{
-              flex: 1, padding: "4px 0", borderRadius: 6, border: "none", cursor: "pointer",
-              background: tab === t ? "#4a90d9" : "#f0f0f0",
-              color: tab === t ? "#fff" : "#555",
-              fontSize: 12, fontWeight: tab === t ? 700 : 400,
-            }}
-          >
-            {t === "dots" ? "Dots" : t === "audio" ? "Audio" : "Style"}
-          </button>
-        ))}
-      </div>
+            onClick={onClose}
+            style={s({ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#aaa", lineHeight: "1", padding: "0 2px" })}
+            aria-label="Close"
+          >×</button>
+        </div>
 
-      {/* Tab content */}
-      {tab === "dots" && <DotsView numericValue={numericValue} chunkSize={chunkSize} setChunkSize={setChunkSize} />}
-      {tab === "audio" && <AudioView value={value} speaking={speaking} onSpeak={speakNumber} />}
-      {tab === "style" && <StyleView />}
+        {/* Tabs */}
+        <div style={s({ display: "flex", gap: 4, marginBottom: 14 })}>
+          {(["dots", "audio", "style"] as PopupTab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={s({
+                flex: 1, padding: "5px 0", borderRadius: 7, border: "none",
+                cursor: "pointer",
+                background: tab === t ? "#4a90d9" : "#eef1ff",
+                color: tab === t ? "#fff" : "#555",
+                fontSize: 12,
+                fontWeight: tab === t ? 700 : 500,
+                fontFamily: "system-ui, sans-serif",
+              })}
+            >
+              {t === "dots" ? "● Dots" : t === "audio" ? "♪ Audio" : "⚙ Style"}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab content */}
+        {tab === "dots" && <DotsView numericValue={numericValue} />}
+        {tab === "audio" && <AudioView value={value} speaking={speaking} onSpeak={speakNumber} />}
+        {tab === "style" && <StyleView />}
+      </div>
     </div>
   );
 }
 
-// --- Dots View ---
-function DotsView({
-  numericValue,
-  chunkSize,
-  setChunkSize,
-}: {
-  numericValue: number | null;
-  chunkSize: 5 | 10;
-  setChunkSize: (n: 5 | 10) => void;
-}) {
+// --- Dot view: always groups of 5 ---
+function DotsView({ numericValue }: { numericValue: number | null }) {
   const n = numericValue !== null ? Math.round(Math.abs(numericValue)) : null;
 
   if (n === null || n > 999) {
     return (
       <div style={{ color: "#666", fontSize: 13, textAlign: "center", padding: "8px 0" }}>
-        Number too large for dot view.<br />
-        <span style={{ fontSize: 12, color: "#999" }}>Try Audio tab to hear it spoken.</span>
+        Too large for dots.<br />
+        <span style={{ fontSize: 12, color: "#4a90d9" }}>Try the Audio tab ♪</span>
       </div>
     );
   }
 
-  if (n <= 20) {
-    return <IndividualDots count={n} />;
+  return <FiveGroupDots count={n} />;
+}
+
+function FiveGroupDots({ count }: { count: number }) {
+  if (count === 0) {
+    return <div style={{ textAlign: "center", color: "#aaa", fontSize: 13 }}>Zero — no dots</div>;
   }
 
-  return <GroupedDots count={n} chunkSize={chunkSize} setChunkSize={setChunkSize} />;
-}
+  // Split into groups of 5
+  const numFullGroups = Math.floor(count / 5);
+  const remainder = count % 5;
+  const groups: number[] = [];
+  for (let i = 0; i < numFullGroups; i++) groups.push(5);
+  if (remainder > 0) groups.push(remainder);
 
-function IndividualDots({ count }: { count: number }) {
+  const colors = ["#4a90d9", "#50c878", "#ff8c42", "#9b59b6", "#e74c3c", "#f39c12", "#1abc9c"];
+
   return (
     <div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center", padding: "4px 0 8px" }}>
-        {Array.from({ length: count }).map((_, i) => (
+      <div style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 6,
+        justifyContent: "center",
+        marginBottom: 10,
+      }}>
+        {groups.map((size, gi) => (
           <div
-            key={i}
+            key={gi}
             style={{
-              width: 14, height: 14, borderRadius: "50%",
-              background: "#4a90d9", flexShrink: 0,
+              background: "#f5f7ff",
+              border: "1.5px solid #dde3ff",
+              borderRadius: 8,
+              padding: "6px 7px",
+              display: "grid",
+              gridTemplateColumns: "repeat(5, 12px)",
+              gap: 3,
             }}
-          />
+          >
+            {Array.from({ length: 5 }).map((_, di) => (
+              <div
+                key={di}
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: "50%",
+                  background: di < size ? colors[gi % colors.length] : "#e8ecf5",
+                  transition: "background 0.1s",
+                }}
+              />
+            ))}
+          </div>
         ))}
       </div>
-      <div style={{ textAlign: "center", fontSize: 12, color: "#888" }}>{count} dot{count !== 1 ? "s" : ""}</div>
-    </div>
-  );
-}
-
-function GroupedDots({
-  count,
-  chunkSize,
-  setChunkSize,
-}: {
-  count: number;
-  chunkSize: 5 | 10;
-  setChunkSize: (n: 5 | 10) => void;
-}) {
-  const groups = Math.floor(count / chunkSize);
-  const remainder = count % chunkSize;
-
-  const colors = ["#4a90d9", "#50c878", "#ff8c42", "#9b59b6", "#e74c3c"];
-
-  return (
-    <div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginBottom: 8 }}>
-        {Array.from({ length: groups }).map((_, gi) => (
-          <div key={gi} style={{ display: "flex", flexWrap: "wrap", gap: 2, width: chunkSize === 5 ? 40 : 56, padding: 3, background: "#f5f5f5", borderRadius: 6 }}>
-            {Array.from({ length: chunkSize }).map((_, di) => (
-              <div key={di} style={{ width: 10, height: 10, borderRadius: "50%", background: colors[gi % colors.length] }} />
-            ))}
-          </div>
-        ))}
-        {remainder > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 2, padding: 3, background: "#f5f5f5", borderRadius: 6 }}>
-            {Array.from({ length: remainder }).map((_, di) => (
-              <div key={di} style={{ width: 10, height: 10, borderRadius: "50%", background: "#aaa" }} />
-            ))}
-          </div>
+      <div style={{ textAlign: "center", fontSize: 12, color: "#888" }}>
+        {numFullGroups > 0 && (
+          <span>{numFullGroups} × 5{remainder > 0 ? ` + ${remainder}` : ""} = </span>
         )}
-      </div>
-      <div style={{ textAlign: "center", fontSize: 11, color: "#888", marginBottom: 6 }}>
-        {groups} group{groups !== 1 ? "s" : ""} of {chunkSize}{remainder > 0 ? ` + ${remainder}` : ""} = {count}
-      </div>
-      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-        <button
-          onClick={() => setChunkSize(5)}
-          style={{ fontSize: 11, padding: "2px 8px", borderRadius: 5, border: "1px solid #ddd", background: chunkSize === 5 ? "#4a90d9" : "#f0f0f0", color: chunkSize === 5 ? "#fff" : "#555", cursor: "pointer" }}
-        >Groups of 5</button>
-        <button
-          onClick={() => setChunkSize(10)}
-          style={{ fontSize: 11, padding: "2px 8px", borderRadius: 5, border: "1px solid #ddd", background: chunkSize === 10 ? "#4a90d9" : "#f0f0f0", color: chunkSize === 10 ? "#fff" : "#555", cursor: "pointer" }}
-        >Groups of 10</button>
+        <strong style={{ color: "#2d3a8c" }}>{count}</strong>
       </div>
     </div>
   );
@@ -189,20 +218,28 @@ function GroupedDots({
 // --- Audio View ---
 function AudioView({ value, speaking, onSpeak }: { value: string; speaking: boolean; onSpeak: () => void }) {
   return (
-    <div style={{ textAlign: "center", padding: "8px 0" }}>
+    <div style={{ textAlign: "center", padding: "12px 0" }}>
       <button
         onClick={onSpeak}
         disabled={speaking}
         style={{
-          background: speaking ? "#ccc" : "#4a90d9", color: "#fff",
-          border: "none", borderRadius: 8, padding: "10px 24px",
-          fontSize: 15, cursor: speaking ? "default" : "pointer",
-          fontWeight: 600, marginBottom: 8,
+          background: speaking ? "#b0c4de" : "#4a90d9",
+          color: "#fff",
+          border: "none",
+          borderRadius: 10,
+          padding: "12px 28px",
+          fontSize: 15,
+          cursor: speaking ? "default" : "pointer",
+          fontWeight: 700,
+          fontFamily: "system-ui, sans-serif",
+          boxShadow: speaking ? "none" : "0 2px 8px rgba(74,144,217,0.3)",
         }}
       >
-        {speaking ? "Speaking..." : "▶ Hear it"}
+        {speaking ? "🔊 Speaking..." : "▶ Hear it"}
       </button>
-      <div style={{ fontSize: 12, color: "#888" }}>Plays "{value}" aloud</div>
+      <div style={{ fontSize: 12, color: "#999", marginTop: 8 }}>
+        Will say: "{value}"
+      </div>
     </div>
   );
 }
@@ -210,9 +247,12 @@ function AudioView({ value, speaking, onSpeak }: { value: string; speaking: bool
 // --- Style View ---
 function StyleView() {
   return (
-    <div style={{ fontSize: 12, color: "#666", textAlign: "center", padding: "4px 0" }}>
-      <div style={{ marginBottom: 8, color: "#444", fontWeight: 600 }}>Number display settings</div>
-      <div>Open the DyslexAI settings panel to change highlight colors and number fonts globally.</div>
+    <div style={{ fontSize: 12, color: "#666", textAlign: "center", padding: "8px 0" }}>
+      <div style={{ marginBottom: 8, fontWeight: 600, color: "#2d3a8c", fontSize: 13 }}>Number styling</div>
+      <div style={{ color: "#777", lineHeight: 1.6 }}>
+        Change highlight color and font in the<br />
+        <strong>DyslexAI settings panel</strong>.
+      </div>
     </div>
   );
 }

@@ -32,6 +32,17 @@ export function applyLensMode(settings: DyslexAISettings): void {
       ? "Verdana, sans-serif"
       : "inherit";
 
+  // Only override spacing values the user has explicitly set (non-zero)
+  const spacingRules = [
+    lensMode.letterSpacing > 0 ? `letter-spacing: ${lensMode.letterSpacing}em !important;` : "",
+    lensMode.wordSpacing > 0 ? `word-spacing: ${lensMode.wordSpacing}em !important;` : "",
+    lensMode.lineHeight > 0 ? `line-height: ${lensMode.lineHeight} !important;` : "",
+  ].filter(Boolean).join("\n      ");
+
+  const fontRule = fontFamily !== "inherit"
+    ? `font-family: ${fontFamily} !important;`
+    : "";
+
   const style = document.createElement("style");
   style.id = STYLE_ID;
   style.textContent = `
@@ -40,12 +51,10 @@ export function applyLensMode(settings: DyslexAISettings): void {
       --dyslexai-number-highlight: ${lensMode.numberHighlightColor};
       --dyslexai-number-highlight-hover: ${lensMode.numberHighlightColor}cc;
     }
-    html body, html body * {
-      font-family: ${fontFamily} !important;
-      letter-spacing: ${lensMode.letterSpacing}em !important;
-      word-spacing: ${lensMode.wordSpacing}em !important;
-      line-height: ${lensMode.lineHeight} !important;
-    }
+    ${fontRule || spacingRules ? `html body, html body * {
+      ${fontRule}
+      ${spacingRules}
+    }` : ""}
   `;
   document.head.appendChild(style);
 
