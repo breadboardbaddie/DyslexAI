@@ -6,7 +6,7 @@ export default function Home() {
           <span className="text-2xl">🧠</span>
           <span className="font-extrabold text-xl text-[#2d3a8c]">DyslexAI</span>
         </div>
-        <a href="https://github.com/alexisfrye/DyslexAI" className="text-sm text-[#4a90d9] hover:underline" target="_blank" rel="noopener noreferrer">
+        <a href="https://github.com/breadboardbaddie/DyslexAI" className="text-sm text-[#4a90d9] hover:underline" target="_blank" rel="noopener noreferrer">
           GitHub →
         </a>
       </nav>
@@ -23,7 +23,7 @@ export default function Home() {
           It lives in your browser — no copy-pasting, no switching apps, no accounts.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <a href="https://github.com/alexisfrye/DyslexAI" className="bg-[#2d3a8c] text-white font-bold px-8 py-4 rounded-xl text-base hover:bg-[#1e2a6e] transition-colors" target="_blank" rel="noopener noreferrer">
+          <a href="https://github.com/breadboardbaddie/DyslexAI" className="bg-[#2d3a8c] text-white font-bold px-8 py-4 rounded-xl text-base hover:bg-[#1e2a6e] transition-colors" target="_blank" rel="noopener noreferrer">
             Download Extension →
           </a>
           <a href="#how-it-works" className="border border-[#d0d8ff] text-[#2d3a8c] font-semibold px-8 py-4 rounded-xl text-base hover:bg-[#eef2ff] transition-colors">
@@ -85,7 +85,7 @@ export default function Home() {
       <section className="bg-[#2d3a8c] py-16 px-6 text-center text-white">
         <h2 className="text-3xl font-bold mb-4">Start reading better. Right now.</h2>
         <p className="text-[#c0caff] mb-8 max-w-md mx-auto">No account. No subscription. Works on every website you already visit.</p>
-        <a href="https://github.com/alexisfrye/DyslexAI" className="inline-block bg-white text-[#2d3a8c] font-bold px-8 py-4 rounded-xl text-base hover:bg-[#eef2ff] transition-colors" target="_blank" rel="noopener noreferrer">
+        <a href="https://github.com/breadboardbaddie/DyslexAI" className="inline-block bg-white text-[#2d3a8c] font-bold px-8 py-4 rounded-xl text-base hover:bg-[#eef2ff] transition-colors" target="_blank" rel="noopener noreferrer">
           Get DyslexAI →
         </a>
       </section>
