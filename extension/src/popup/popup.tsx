@@ -95,6 +95,23 @@ function Popup() {
               onChange={(v) => updateCoach({ aggressiveness: v as DyslexAISettings["coachMode"]["aggressiveness"] })}
             />
             <ApiKeyInput value={c.apiKey} onChange={(v) => updateCoach({ apiKey: v })} />
+            <button
+              onClick={() => {
+                chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                  if (tabs[0]?.id) {
+                    chrome.tabs.sendMessage(tabs[0].id, createMessage("TRIGGER_COACH", {}));
+                  }
+                });
+                window.close();
+              }}
+              style={{
+                width: "100%", marginTop: 4, padding: "8px 0",
+                background: "#4a90d9", color: "#fff", border: "none",
+                borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              Open Coach on this page →
+            </button>
           </>
         )}
       </Section>

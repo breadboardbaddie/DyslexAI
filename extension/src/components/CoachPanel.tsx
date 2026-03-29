@@ -17,51 +17,63 @@ function nextFallback() {
 // Use a long-lived port to call the background service worker.
 // Ports keep the worker alive for the duration of the call and avoid CORS —
 // background workers can fetch api.anthropic.com, content scripts cannot.
-function callTutorViaPort(payload: TutorMessagePayload): Promise<TutorResponsePayload> {
-  return new Promise((resolve, reject) => {
-    const port = chrome.runtime.connect({ name: "dyslexai-tutor" });
-    let settled = false;
+function callTutorViaPort(
+  payload: TutorMessagePayload,
+  onChunk: (chunk: string) => void,
+  onDone: (result: TutorResponsePayload) => void,
+  onError: (err: Error) => void,
+): void {
+  const port = chrome.runtime.connect({ name: "dyslexai-tutor" });
+  let settled = false;
 
-    // Keepalive: ping the port every 20s so Chrome doesn't kill the service worker
-    // mid-fetch. MV3 workers are killed after ~30s of inactivity without a port ping.
-    const keepAlive = setInterval(() => {
-      try { port.postMessage({ keepAlive: true }); } catch { /* port already closed */ }
-    }, 20000);
+  const keepAlive = setInterval(() => {
+    try { port.postMessage({ keepAlive: true }); } catch { /* port already closed */ }
+  }, 20000);
 
-    const timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        clearInterval(keepAlive);
-        port.disconnect();
-        reject(new Error("Timed out (30s). Check your API key and internet connection."));
-      }
-    }, 30000);
+  const timeout = setTimeout(() => {
+    if (!settled) {
+      settled = true;
+      clearInterval(keepAlive);
+      port.disconnect();
+      onError(new Error("Timed out (30s). Check your API key and internet connection."));
+    }
+  }, 30000);
 
-    port.onMessage.addListener((msg: { ok?: boolean; result?: TutorResponsePayload; error?: string; keepAlive?: boolean }) => {
-      if (msg.keepAlive) return; // ignore pong
+  port.onMessage.addListener((msg: { ok?: boolean; type?: string; chunk?: string; result?: TutorResponsePayload; error?: string; keepAlive?: boolean }) => {
+    if (msg.keepAlive) return;
+    if (!msg.ok) {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
       clearInterval(keepAlive);
       port.disconnect();
-      if (msg.ok && msg.result) {
-        resolve(msg.result);
-      } else {
-        reject(new Error(msg.error ?? "Unknown error from background"));
-      }
-    });
-
-    port.onDisconnect.addListener(() => {
+      onError(new Error(msg.error ?? "Unknown error from background"));
+      return;
+    }
+    if (msg.type === "chunk" && msg.chunk !== undefined) {
+      onChunk(msg.chunk);
+      return;
+    }
+    if (msg.type === "done" && msg.result) {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
       clearInterval(keepAlive);
-      const err = chrome.runtime.lastError?.message ?? "Service worker disconnected";
-      reject(new Error(err));
-    });
-
-    port.postMessage(payload);
+      port.disconnect();
+      onDone(msg.result);
+    }
   });
+
+  port.onDisconnect.addListener(() => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timeout);
+    clearInterval(keepAlive);
+    const err = chrome.runtime.lastError?.message ?? "Service worker disconnected";
+    onError(new Error(err));
+  });
+
+  port.postMessage(payload);
 }
 
 interface Props {
@@ -73,6 +85,7 @@ export function CoachPanel({ regionText, onClose }: Props) {
   const [history, setHistory] = useState<TutorTurn[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [streamingReply, setStreamingReply] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [started, setStarted] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -105,17 +118,23 @@ export function CoachPanel({ regionText, onClose }: Props) {
       apiKey,
     };
 
-    try {
-      const response = await callTutorViaPort(payload);
-      appendTurns(userMessage, response.reply, mode);
-    } catch (err) {
-      console.error("[DyslexAI Coach]", err);
-      const msg = err instanceof Error ? err.message : String(err);
-      appendTurns(userMessage, nextFallback(), mode);
-      setError(`Claude error: ${msg}`);
-    } finally {
-      setLoading(false);
-    }
+    setStreamingReply("");
+    callTutorViaPort(
+      payload,
+      (chunk) => setStreamingReply((prev) => (prev ?? "") + chunk),
+      (response) => {
+        setStreamingReply(null);
+        appendTurns(userMessage, response.reply, mode);
+        setLoading(false);
+      },
+      (err) => {
+        console.error("[DyslexAI Coach]", err);
+        setStreamingReply(null);
+        appendTurns(userMessage, nextFallback(), mode);
+        setError(`Claude error: ${err.message}`);
+        setLoading(false);
+      },
+    );
   }
 
   function appendTurns(userMessage: string, reply: string, mode: "open" | "socratic") {
@@ -233,13 +252,29 @@ export function CoachPanel({ regionText, onClose }: Props) {
           </div>
         ))}
 
-        {loading && (
+        {loading && streamingReply === "" && (
           <div style={s({ display: "flex", justifyContent: "flex-start", marginBottom: 10 })}>
             <div style={s({
               background: "#fff", borderRadius: "12px 12px 12px 2px",
               padding: "10px 14px", fontSize: 13, color: "#aaa",
               border: "1px solid #e0e4ff", fontFamily: "system-ui, sans-serif",
             })}>Coach is thinking…</div>
+          </div>
+        )}
+
+        {streamingReply !== null && streamingReply !== "" && (
+          <div style={s({ display: "flex", justifyContent: "flex-start", marginBottom: 10 })}>
+            <div style={s({
+              background: "#fff", color: "#333",
+              borderRadius: "12px 12px 12px 2px",
+              padding: "10px 12px", maxWidth: "85%", fontSize: 13,
+              lineHeight: "1.6", border: "1px solid #e0e4ff",
+              boxShadow: "0 1px 4px rgba(74,144,217,0.07)",
+              fontFamily: "system-ui, sans-serif",
+            })}>
+              {streamingReply}
+              <span style={{ opacity: 0.5 }}>▌</span>
+            </div>
           </div>
         )}
 

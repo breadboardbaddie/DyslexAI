@@ -104,29 +104,7 @@ async function scanPageForMath() {
     }
   }
 
-  // Pass 2: AI-enhanced scan if API key available
-  const apiKey = settings.coachMode.apiKey;
-  if (!apiKey) return;
-
-  const bodyText = document.body.innerText.slice(0, 6000);
-  if (!bodyText.trim()) return;
-
-  const msg = createMessage("SCAN_REQUEST", {
-    text: bodyText,
-    aggressiveness: settings.coachMode.aggressiveness,
-  });
-
-  try {
-    const result = await sendToBackground(msg) as {
-      regions: Array<{ text: string; type: string; confidence: number }>;
-    };
-    if (!result?.regions?.length) return;
-    result.regions
-      .filter((r) => r.confidence > 0.5)
-      .forEach((region) => markCoachRegionByText(region.text));
-  } catch {
-    // silent — AI scan is enhancement only
-  }
+  // Local scan only — avoids concurrent API calls while tutor is active
 }
 
 function attachCoachRegion(el: HTMLElement, text: string) {

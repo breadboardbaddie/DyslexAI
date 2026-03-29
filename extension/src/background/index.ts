@@ -24,17 +24,7 @@ chrome.runtime.onConnect.addListener((port) => {
   port.onMessage.addListener(async (payload: TutorMessagePayload & { keepAlive?: boolean }) => {
     if (payload.keepAlive) return; // ignore pings, just keeping worker alive
     try {
-      const reply = await callAnthropicDirect(payload);
-      port.postMessage({ ok: true, result: {
-        reply,
-        conversationHistory: [
-          ...payload.conversationHistory,
-          ...(payload.userMessage.trim()
-            ? [{ role: "user" as const, content: payload.userMessage, mode: payload.mode }]
-            : []),
-          { role: "assistant" as const, content: reply, mode: payload.mode },
-        ],
-      }});
+      await streamAnthropicDirect(payload, port);
     } catch (err) {
       console.error("[DyslexAI background] tutor error:", err);
       port.postMessage({ ok: false, error: String(err) });
@@ -42,7 +32,7 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
-async function callAnthropicDirect(payload: TutorMessagePayload): Promise<string> {
+async function streamAnthropicDirect(payload: TutorMessagePayload, port: chrome.runtime.Port): Promise<void> {
   const apiKey = payload.apiKey?.trim();
   if (!apiKey) throw new Error("No API key provided");
 
@@ -86,10 +76,12 @@ async function callAnthropicDirect(payload: TutorMessagePayload): Promise<string
       "Content-Type": "application/json",
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
     },
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 512,
+      stream: true,
       system: TUTOR_SYSTEM_PROMPT,
       messages: deduped,
     }),
@@ -100,12 +92,48 @@ async function callAnthropicDirect(payload: TutorMessagePayload): Promise<string
     throw new Error(`${response.status}: ${body}`);
   }
 
-  const data = await response.json() as {
-    content: Array<{ type: string; text: string }>;
-  };
-  const text = data.content?.find((c) => c.type === "text")?.text;
-  if (!text) throw new Error("No text in response");
-  return text;
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let fullReply = "";
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const data = line.slice(6).trim();
+      if (data === "[DONE]") continue;
+      try {
+        const event = JSON.parse(data) as { type: string; delta?: { type: string; text: string } };
+        if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
+          const chunk = event.delta.text;
+          fullReply += chunk;
+          port.postMessage({ ok: true, type: "chunk", chunk });
+        }
+      } catch { /* skip malformed SSE lines */ }
+    }
+  }
+
+  port.postMessage({
+    ok: true,
+    type: "done",
+    result: {
+      reply: fullReply,
+      conversationHistory: [
+        ...payload.conversationHistory,
+        ...(payload.userMessage.trim()
+          ? [{ role: "user" as const, content: payload.userMessage, mode: payload.mode }]
+          : []),
+        { role: "assistant" as const, content: fullReply, mode: payload.mode },
+      ],
+    },
+  });
 }
 
 // Standard message handler for scan + accessibility (these use the SDK, which is fine)
