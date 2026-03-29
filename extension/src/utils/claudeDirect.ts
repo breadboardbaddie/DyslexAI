@@ -38,7 +38,8 @@ export async function callClaude(req: ClaudeRequest): Promise<string> {
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`Claude API error ${response.status}: ${err}`);
+    console.error("[DyslexAI] Claude API raw error:", response.status, err);
+    throw new Error(`${response.status}: ${err}`);
   }
 
   const data = await response.json() as {

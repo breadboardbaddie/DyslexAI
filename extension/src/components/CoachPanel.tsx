@@ -104,10 +104,11 @@ export function CoachPanel({ regionText, onClose }: Props) {
       appendTurns(userMessage, reply, mode);
     } catch (err) {
       console.error("[DyslexAI Coach]", err);
-      // On error, still give a fallback question so UI doesn't freeze
       const fallback = nextFallback();
       appendTurns(userMessage, fallback, mode);
-      setError("Couldn't reach Claude. Using a fallback question. Check your API key in settings.");
+      // Show the real error so it's diagnosable
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Claude error: ${msg}`);
     } finally {
       setLoading(false);
     }
