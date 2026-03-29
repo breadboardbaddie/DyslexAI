@@ -47,6 +47,15 @@ async function init() {
     }, { timeout: 1000 });
   });
   observer.observe(document.body, { childList: true, subtree: true });
+
+  // Keyboard shortcut: Alt+C opens Coach on any page
+  document.addEventListener("keydown", (e) => {
+    if (e.altKey && e.key === "c" && settings.coachMode.enabled) {
+      e.preventDefault();
+      const bodyText = document.body.innerText.slice(0, 500);
+      openCoachPanel(bodyText);
+    }
+  });
 }
 
 function openNumberPopup(value: string, numericValue: number | null, anchorEl: HTMLElement) {
